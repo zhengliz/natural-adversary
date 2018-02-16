@@ -1,5 +1,5 @@
 # Generating Natural Adversarial Examples
-Code for the paper "[Generating Natural Adversarial Examples](https://arxiv.org/abs/1710.11342)".
+Code for the paper "[Generating Natural Adversarial Examples](https://arxiv.org/abs/1710.11342)", ICLR 2018.
 
 
 ## Dependency
