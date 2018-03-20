@@ -12,7 +12,7 @@ Code for the paper "[Generating Natural Adversarial Examples](https://arxiv.org/
 @inproceedings{zhengli2018iclr,
     title={Generating Natural Adversarial Examples},
     author={Zhao, Zhengli and Dua, Dheeru and Singh, Sameer},
-    booktitle={Proceedings of the International Conference on Learning Representations (ICLR)},
+    booktitle={International Conference on Learning Representations (ICLR)},
     year={2018}
 }
 ```
