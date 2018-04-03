@@ -561,6 +561,7 @@ def perturb(data_source, epoch, corpus_test, hybrid=False):
             
             c = autoencoder.encode(hypothesis, lengths, noise=False)
             z = inverter(c).data.cpu()
+            gan_gen = gan_gen.cpu()
             batch_size = premise.size(0)
             for i in range(batch_size):
                 f.write("========================================================\n")
@@ -597,7 +598,8 @@ def perturb(data_source, epoch, corpus_test, hybrid=False):
                     print("no adversary found for : \n {0} \n {1}\n\n".\
                           format(" ".join(premise_words[i]), " ".join(hypothesise_words[i])))
                         
-
+    gan_gen = gan_gen.cuda()
+    
 def compute_ppl(file_path):
     sentences = []
     with open(file_path, 'r') as f:
