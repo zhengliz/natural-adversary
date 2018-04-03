@@ -6,6 +6,7 @@ import json
 import torch.utils.data as data
 import pickle as pkl
 from torch.autograd import Variable
+from copy import deepcopy
 
 
 def load_kenlm():
@@ -250,12 +251,11 @@ def get_ppl(lm, sentences):
 class SNLIDataset(data.Dataset):
 
     def __init__(self, path="/home/ddua/data/snli/snli_1.0", train=True, \
-                 vocab_size= 11000, lvt=True, maxlen = 10, reset_vocab=None):
+                 vocab_size= 11000, maxlen = 10, reset_vocab=None):
         self.train = train
         self.train_data=[]
         self.test_data=[]
         self.root = path
-        self.lvt= lvt
         self.train_path = os.path.join(path, 'train.txt')
         self.test_path = os.path.join(path, 'test.txt')
         self.lowercase = True
@@ -266,11 +266,16 @@ class SNLIDataset(data.Dataset):
         self.labels = {'entailment':0, 'neutral':1, 'contradiction':2}
         self.maxlen = maxlen
         
-        self.make_vocab()
         if reset_vocab:
-            self.dictionary.word2idx = json.load(open(reset_vocab))
+            self.dictionary.word2idx = deepcopy(reset_vocab)
             self.dictionary.idx2word = {v: k for k, v in self.dictionary.word2idx.items()}
+        else:
+            self.make_vocab()
             
+        if os.path.exists(self.root+"/sent_ids.pkl"):
+            self.sentence_ids = pkl.load(open(self.root+"/sent_ids.pkl",'r'))
+        else:
+            print("Sentence IDs not found!!")
             
         if self.train and os.path.exists(self.train_path):
             self.train_data = self.tokenize(self.train_path)
@@ -291,33 +296,25 @@ class SNLIDataset(data.Dataset):
             return len(self.test_data)
         
     def make_vocab(self):
-        if os.path.exists(self.root+"/vocab_"+str(self.vocab_size)+".pkl"):
-            self.dictionary.word2idx = pkl.load(open(self.root+"/vocab_"+str(self.vocab_size)+".pkl",'r'))
-            self.sentence_ids = pkl.load(open(self.root+"/sent_ids.pkl",'r'))
-            for word, idx in self.dictionary.word2idx.items():
-                self.dictionary.idx2word[idx] = word
-        
-        else:
-            # Add words to the dictionary
-            with open(self.sentence_path, 'r') as f:
-                for lines in f:
-                    toks=lines.strip().split('\t')
-                    self.sentence_ids[toks[0]]=toks[1].strip()
-                    line = self.sentence_ids[toks[0]]
-                    if self.lowercase:
-                        # -1 to get rid of \n character
-                        words = line[:-1].lower().split(" ")
-                    else:
-                        words = line[:-1].split(" ")
-                    for word in words:
-                        #word = word.decode('Windows-1252').encode('utf-8')
-                        self.dictionary.add_word(word)
-    
-            # prune the vocabulary
-            if self.lvt:
-                self.dictionary.prune_vocab(k=self.vocab_size, cnt=False)
-            pkl.dump(self.sentence_ids, open(self.root+"/sent_ids.pkl", 'w'))
-            pkl.dump(self.dictionary.word2idx, open(self.root+"/vocab_"+str(len(self.dictionary.word2idx))+".pkl", 'w'))
+        # Add words to the dictionary
+        with open(self.sentence_path, 'r') as f:
+            for lines in f:
+                toks=lines.strip().split('\t')
+                self.sentence_ids[toks[0]]=toks[1].strip()
+                line = self.sentence_ids[toks[0]]
+                if self.lowercase:
+                    # -1 to get rid of \n character
+                    words = line[:-1].lower().split(" ")
+                else:
+                    words = line[:-1].split(" ")
+                for word in words:
+                    #word = word.decode('Windows-1252').encode('utf-8')
+                    self.dictionary.add_word(word)
+
+        # prune the vocabulary
+        self.dictionary.prune_vocab(k=self.vocab_size, cnt=False)
+        pkl.dump(self.sentence_ids, open(self.root+"/sent_ids.pkl", 'w'))
+        pkl.dump(self.dictionary.word2idx, open(self.root+"/vocab_"+str(len(self.dictionary.word2idx))+".pkl", 'w'))
 
     def get_indices(self, words):
         vocab = self.dictionary.word2idx
@@ -386,10 +383,10 @@ class SNLIDataset(data.Dataset):
         return lines
 
 
-def load_embeddings(root = '/home/ddua/data/snli/snli_lm/'):
-    vocab_path=root+'vocab_41578.pkl'
+def load_embeddings(root = './data/classifier/'):
+    vocab_path=root+'vocab.pkl'
     file_path=root+'embeddings'
-    vocab = pkl.load(open(vocab_path))
+    vocab = pkl.load(open(vocab_path, 'r'))
     
     embeddings = torch.FloatTensor(len(vocab),100).uniform_(-0.1, 0.1)
     embeddings[0].fill_(0)

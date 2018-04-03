@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
-from search import search
+from search import search, search_fast
 from utils import to_gpu, Corpus, batchify, SNLIDataset, train_ngram_lm, get_ppl, load_ngram_lm, get_delta, collate_snli
 from models import Seq2Seq, MLP_D, MLP_G, MLP_I, MLP_I_AE, JSDistance, Seq2SeqCAE, Baseline_Embeddings, Baseline_LSTM
 
@@ -21,6 +21,8 @@ parser = argparse.ArgumentParser(description='PyTorch ARAE for Text')
 # Path Arguments
 parser.add_argument('--data_path', type=str, required=True,
                     help='location of the data corpus')
+parser.add_argument('--classifier_path', type=str, required=True,
+                    help='location of the classifier files')
 parser.add_argument('--kenlm_path', type=str, default='/home/ddua/kenlm',
                     help='path to kenlm directory')
 parser.add_argument('--outf', type=str, default='example',
@@ -36,6 +38,7 @@ parser.add_argument('--lowercase', type=bool, default=True,
                     help='lowercase all text')
 parser.add_argument('--packed_rep', type=bool, default=False,
                     help='pad all sentences to fixed maxlen')
+
 
 # Model Arguments
 parser.add_argument('--emsize', type=int, default=300,
@@ -122,6 +125,10 @@ parser.add_argument('--use_inv_ae', action='store_true', default=False,
                     help='use encoder->inv->gen->dec')
 parser.add_argument('--update_base', action='store_true', default=False,
                     help='updating base models')
+parser.add_argument('--reload_exp', type=str, default=None,
+                    help='resume a previous experiment')
+parser.add_argument('--load_pretrained', type=str, default=None,
+                    help='load a pre-trained encoder and decoder to train the inverter')
 
 # Evaluation Arguments
 parser.add_argument('--sample', action='store_true',
@@ -131,6 +138,7 @@ parser.add_argument('--N', type=int, default=5,
 parser.add_argument('--log_interval', type=int, default=200,
                     help='interval to log autoencoder training results')
 
+
 # Other
 parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
@@ -138,13 +146,13 @@ parser.add_argument('--cuda', action='store_true', default=False,
                     help='use CUDA')
 parser.add_argument('--debug_mode', action='store_true', default=False,
                     help='debug mode to not create a new dir')
-parser.add_argument('--reload_exp', type=str, default=None,
-                    help='resume a previous experiment')
-parser.add_argument('--load_pretrained', type=str, default=None,
-                    help='load a pre-trained encoder and decoder to train the inverter')
+parser.add_argument('--hybrid', type=bool, default=False,
+                    help='performs hybrid search')
 
 args = parser.parse_args()
 print(vars(args))
+
+
 if args.cuda:
     torch.cuda.device(0)
     print(torch.cuda.device_count())
@@ -155,6 +163,15 @@ elif args.reload_exp:
     args.outf = args.outf+"/"+args.reload_exp
 else:
     args.outf = args.outf+"/"+str(int(time.time()))
+    
+# make output directory if it doesn't already exist
+if not os.path.isdir(os.environ["DATA_PATH"]+'/arae/output'):
+    os.makedirs(os.environ["DATA_PATH"]+'/arae/output')
+if not os.path.isdir(os.environ["DATA_PATH"]+'/arae/output/{}'.format(args.outf)):
+    os.makedirs(os.environ["DATA_PATH"]+'/arae/output/{}'.format(args.outf))
+    os.makedirs(os.environ["DATA_PATH"]+'/arae/output/{}'.format(args.outf+"/models"))
+print("Dumping into directory {0}".format(args.outf))
+
 
 # Set the random seed manually for reproducibility.
 random.seed(args.seed)
@@ -167,23 +184,7 @@ if torch.cuda.is_available():
     else:
         torch.cuda.manual_seed(args.seed)
 
-###############################################################################
-# Load data
-###############################################################################
 
-# make output directory if it doesn't already exist
-if not os.path.isdir(os.environ["DATA_PATH"]+'/arae/output'):
-    os.makedirs(os.environ["DATA_PATH"]+'/arae/output')
-if not os.path.isdir(os.environ["DATA_PATH"]+'/arae/output/{}'.format(args.outf)):
-    os.makedirs(os.environ["DATA_PATH"]+'/arae/output/{}'.format(args.outf))
-    os.makedirs(os.environ["DATA_PATH"]+'/arae/output/{}'.format(args.outf+"/models"))
-print("Dumping into directory {0}".format(args.outf))
-# save arguments
-
-
-###############################################################################
-# Build the models
-###############################################################################
 if args.reload_exp:
     cur_dir = os.environ["DATA_PATH"]+'/arae/output/example/{}/'.format(args.reload_exp)
     print("Loading experiment from "+ cur_dir)
@@ -194,6 +195,10 @@ else:
     cur_dir = os.environ["DATA_PATH"]+'/arae/output/example/'.format(args.outf)
     print("Create experiment at "+ cur_dir)
     
+###############################################################################
+# Load data
+###############################################################################
+
 # create corpus
 if args.load_pretrained:
     corpus = Corpus(args.data_path,
@@ -211,17 +216,17 @@ eval_batch_size = 10
 if not args.convolution_enc:
     args.packed_rep = True
 train_data = batchify(corpus.train, args.batch_size, args.maxlen, packed_rep=args.packed_rep, shuffle=True)
-corpus_test = SNLIDataset(train=False, vocab_size=41578, reset_vocab="/home/ddua/data/arae/output/example/1504200881/vocab.json")
-testloader = torch.utils.data.DataLoader(corpus_test, batch_size = 10, collate_fn=collate_snli, shuffle=False)
+corpus_test = SNLIDataset(train=False, vocab_size=args.vocab_size+4, reset_vocab=corpus.dictionary.word2idx)
+testloader = torch.utils.data.DataLoader(corpus_test, batch_size=10, collate_fn=collate_snli, shuffle=False)
 test_data = iter(testloader)
 
-classifier1 = Baseline_Embeddings(100,maxlen=10, gpu=True, vocab_size=41578)
-classifier1.load_state_dict(torch.load("/home/ddua/data/snli/baseline/model_emb.pt"))
+classifier1 = Baseline_Embeddings(100,vocab_size=args.vocab_size+4)
+classifier1.load_state_dict(torch.load(args.classifier_path+"/baseline/model_emb.pt"))
 classifier2 = Baseline_LSTM(100,300,maxlen=10, gpu=args.cuda)
-classifier2.load_state_dict(torch.load("/home/ddua/data/snli/baseline/model_lstm.pt"))
+classifier2.load_state_dict(torch.load(args.classifier_path+"/baseline/model_lstm.pt"))
 
-vocab_classifier1 = pkl.load(open("/home/ddua/data/snli/snli_1.0/vocab_41578.pkl", 'r'))
-vocab_classifier2 = pkl.load(open("/home/ddua/data/snli/snli_1.0/vocab_11004.pkl", 'r'))
+vocab_classifier1 = pkl.load(open(args.classifier_path+"/vocab.pkl", 'r'))
+vocab_classifier2 = pkl.load(open(args.classifier_path+"/vocab.pkl", 'r'))
 
 print("Loaded data!")
     
@@ -234,6 +239,10 @@ if args.reload_exp:
     start_epoch = file_numbers[-1]+1
     print("Starting with epoch :{0}".format(start_epoch))
 
+###############################################################################
+# Build the models
+###############################################################################
+
 if args.reload_exp or args.load_pretrained:
     autoencoder = torch.load(open(cur_dir+'/models/autoencoder_model.pt'))
     gan_gen = torch.load(open(cur_dir+'/models/gan_gen_model.pt'))
@@ -242,7 +251,7 @@ if args.reload_exp or args.load_pretrained:
         corpus.dictionary.word2idx = json.load(f)
 
     if args.load_pretrained:
-        inverter = MLP_I_AE(args.nhidden, args.z_size, args.arch_i, gpu=args.cuda)
+        inverter = MLP_I(args.nhidden, args.z_size, args.arch_i, gpu=args.cuda)
     else:
         inverter = torch.load(open(cur_dir+'/models/inverter_model.pt'))
 else:
@@ -304,15 +313,6 @@ print(inverter)
 print(gan_gen)
 print(gan_disc)
 
-if not args.cuda:
-    autoencoder.gpu = False
-    autoencoder = autoencoder.cpu()
-    gan_gen = gan_gen.cpu()
-    gan_disc = gan_disc.cpu()
-    inverter = inverter.cpu()
-    classifier1.cpu()
-    classifier2.cpu()
-    
 optimizer_ae = optim.SGD(autoencoder.parameters(), lr=args.lr_ae)
 optimizer_inv = optim.Adam(inverter.parameters(),
                            lr=args.lr_inv,
@@ -338,8 +338,13 @@ if args.cuda:
     classifier1 = classifier1.cuda()
     classifier2 = classifier2.cuda()
 else:
-    classifier1 = classifier1.cpu()
-    classifier2 = classifier2.cpu()
+    autoencoder.gpu = False
+    autoencoder = autoencoder.cpu()
+    gan_gen = gan_gen.cpu()
+    gan_disc = gan_disc.cpu()
+    inverter = inverter.cpu()
+    classifier1.cpu()
+    classifier2.cpu()
 
 ###############################################################################
 # Training code
@@ -543,7 +548,7 @@ def evaluate_inverter(data_source, epoch):
                 f.write("\n\n")
 
 
-def perturb(data_source, epoch, corpus_test):
+def perturb(data_source, epoch, corpus_test, hybrid=False):
     # Turn on evaluation mode which disables dropout.
     autoencoder.eval()
     
@@ -551,18 +556,24 @@ def perturb(data_source, epoch, corpus_test):
                   "a") as f:
         for batch in data_source:
             premise, hypothesis, target, premise_words , hypothesise_words, lengths = batch
-            if args.cuda:
-                premise = premise.cuda()
-                hypothesis = hypothesis.cuda()
+            premise = to_gpu(args.cuda, premise)
+            hypothesis = to_gpu(args.cuda, hypothesis)
+            
             c = autoencoder.encode(hypothesis, lengths, noise=False)
             z = inverter(c).data.cpu()
             batch_size = premise.size(0)
             for i in range(batch_size):
                 f.write("========================================================\n")
                 f.write(" ".join(hypothesise_words[i])+"\n")
-                x_adv1, x_adv2, d_adv1, d_adv2, all_adv = search(gan_gen, pred_fn, \
+                if hybrid:
+                    x_adv1, x_adv2, d_adv1, d_adv2, all_adv = search(gan_gen, pred_fn, \
                                 (premise[i].unsqueeze(0), hypothesis[i].unsqueeze(0)), \
                                 target[i], z[i].view(1,100))
+                else:
+                    x_adv1, x_adv2, d_adv1, d_adv2, all_adv = search_fast(gan_gen, pred_fn, \
+                                (premise[i].unsqueeze(0), hypothesis[i].unsqueeze(0)), \
+                                target[i], z[i].view(1,100))
+                
                 try:
                     hyp_sample_idx1 = autoencoder.generate(x_adv1, 10, True).data.cpu().numpy()[0]
                     hyp_sample_idx2 = autoencoder.generate(x_adv2, 10, True).data.cpu().numpy()[0]
@@ -960,8 +971,8 @@ for epoch in range(start_epoch, args.epochs+1):
     # end of epoch ----------------------------
     # evaluation
     
-    if not args.update_base and epoch%1==0:
-        perturb(test_data, epoch, corpus_test)
+    if not args.update_base:
+        perturb(test_data, epoch, corpus_test, hybrid=args.hybrid)
         test_data = iter(testloader)
     
     save_model(epoch)

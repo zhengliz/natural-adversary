@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from copy import deepcopy
+from torch.autograd import Variable
 
 
 def get_min(indices_adv1, indices_adv2, d):
@@ -22,7 +23,42 @@ def get_min(indices_adv1, indices_adv2, d):
     else:
         return idx_adv1, idx_adv2
 
+def search_fast(generator, pred_fn, x, y, z, nsamples=20, right=0.005):
+    premise, hypothesis = x
+    d_adv1, d_adv2 = None, None
+    right_curr = right
+    counter = 0
+    while counter<=5: 
+        mus = z.repeat(nsamples, 1)
+        delta = torch.FloatTensor(mus.size()).uniform_(-1*right_curr, right_curr)
+        dist = np.array([np.sqrt(np.sum(x**2)) for x in delta.cpu().numpy()])
+        perturb_z = Variable(mus + delta, volatile=True)
+        x_tilde = generator(perturb_z)
+        y_tilde1, y_tilde2, all_adv = pred_fn((premise, hypothesis, x_tilde, dist))        
 
+        indices_adv1 = np.where(y_tilde1.data.cpu().numpy() != y.data.cpu().numpy())[0]
+        indices_adv2 = np.where(y_tilde2.data.cpu().numpy() != y.data.cpu().numpy())[0]
+
+        if (len(indices_adv1)>0) and (indices_adv1[0] == 0):
+            indices_adv1 = np.delete(indices_adv1, 0)
+        if (len(indices_adv2)>0) and (indices_adv2[0]) == 0:
+            indices_adv2 = np.delete(indices_adv2, 0)
+            
+        if len(indices_adv1) == 0 or len(indices_adv2) == 0:
+            counter += 1
+            right_curr *= 2
+        else:
+            idx_adv1, idx_adv2 = get_min(indices_adv1, indices_adv2, dist)
+            if d_adv1 is None or ((dist[idx_adv1] < d_adv1) and (dist[idx_adv2] < d_adv2)):
+                x_adv1 = x_tilde[idx_adv1]
+                x_adv2 = x_tilde[idx_adv2]
+                d_adv1 = float(dist[idx_adv1])
+                d_adv2 = float(dist[idx_adv2])
+            return x_adv1, x_adv2, d_adv1, d_adv2, all_adv
+    print("\nGoing into infinite loop.......\n")
+    return x_adv1, x_adv2, d_adv1, d_adv2, all_adv
+
+    
 def search(generator, pred_fn, x, y, z, nsamples=100, l=0., h=1.0, step=0.005, stop=5, p=2):
     premise, hypothesis = x
     x_adv1, x_adv2, d_adv1, d_adv2, d_adv = None, None, None, None, None

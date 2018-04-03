@@ -58,13 +58,15 @@ parser.add_argument('--beta1', type=float, default=0.9,
                     help='beta1 for adam. default=0.9')
 parser.add_argument('--cuda', action='store_true', default=True,
                     help='use CUDA')
-parser.add_argument('--save_path', action='store_true', default=True,
+parser.add_argument('--save_path', type=str, required=True,
                     help='used for saving the models')
+parser.add_argument('--vocab_size', type=int, default=11004,
+                    help='vocabulary size')
 
 args = parser.parse_args()
 
-corpus_train = SNLIDataset(train=True, vocab_size=11004, lvt=False, path=args.data_path)
-corpus_test = SNLIDataset(train=False, vocab_size=11004, lvt=False, path=args.data_path)
+corpus_train = SNLIDataset(train=True, vocab_size=args.vocab_size, path=args.data_path)
+corpus_test = SNLIDataset(train=False, vocab_size=args.vocab_size, path=args.data_path)
 trainloader= torch.utils.data.DataLoader(corpus_train, batch_size = args.batch_size, collate_fn=collate_snli, shuffle=True)
 train_iter = iter(trainloader)
 testloader= torch.utils.data.DataLoader(corpus_test, batch_size = args.batch_size, collate_fn=collate_snli, shuffle=False)
@@ -76,7 +78,7 @@ torch.manual_seed(args.seed)
 if args.model_type=="lstm":
     baseline_model = Baseline_LSTM(100,300,maxlen=args.maxlen, gpu=args.cuda)
 elif args.model_type=="emb":
-    baseline_model = Baseline_Embeddings(100,maxlen=args.maxlen, gpu=args.cuda, vocab_size=11004)
+    baseline_model = Baseline_Embeddings(100, vocab_size=args.vocab_size)
     
 if args.cuda:
     baseline_model = baseline_model.cuda()

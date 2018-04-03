@@ -801,7 +801,7 @@ class Baseline_LSTM(nn.Module):
 
 
 class Baseline_Embeddings(nn.Module):
-    def __init__(self, emb_size,maxlen=10, vocab_size=11004, gpu=False):
+    def __init__(self, emb_size, vocab_size=11004):
         super(Baseline_Embeddings, self).__init__()
         self.embedding_prem = nn.Embedding(vocab_size, emb_size)
         self.embedding_hypo = nn.Embedding(vocab_size, emb_size)
