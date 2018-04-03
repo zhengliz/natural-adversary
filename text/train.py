@@ -550,18 +550,21 @@ def evaluate_inverter(data_source, epoch):
 
 def perturb(data_source, epoch, corpus_test, hybrid=False):
     # Turn on evaluation mode which disables dropout.
+    global gan_gen, autoencoder, inverter
+    gan_gen = gan_gen.cpu()
+    inverter = inverter.cpu()
     autoencoder.eval()
+    autoencoder = autoencoder.cpu()
+    autoencoder.gpu = False
     
     with open(os.environ["DATA_PATH"]+"/arae/output/%s/%s_perturbation.txt" % (args.outf, epoch),
                   "a") as f:
         for batch in data_source:
             premise, hypothesis, target, premise_words , hypothesise_words, lengths = batch
-            premise = to_gpu(args.cuda, premise)
-            hypothesis = to_gpu(args.cuda, hypothesis)
             
             c = autoencoder.encode(hypothesis, lengths, noise=False)
             z = inverter(c).data.cpu()
-            gan_gen = gan_gen.cpu()
+            
             batch_size = premise.size(0)
             for i in range(batch_size):
                 f.write("========================================================\n")
@@ -599,6 +602,9 @@ def perturb(data_source, epoch, corpus_test, hybrid=False):
                           format(" ".join(premise_words[i]), " ".join(hypothesise_words[i])))
                         
     gan_gen = gan_gen.cuda()
+    inverter = inverter.cuda()
+    autoencoder = autoencoder.cuda()
+    autoencoder.gpu = True
     
 def compute_ppl(file_path):
     sentences = []
