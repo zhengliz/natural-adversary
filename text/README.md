@@ -19,9 +19,11 @@ Once you have pretrained models for autoencoder, generator and discriminator, yo
 `python train.py --data_path ./data --load_pretrained <pretrain_exp_ID> --classifier_path ./models`
 
 4.) By default, we use fast search instead of hybrid search (as described in the paper). 
+
 You can pass an argument `--hybrid` above to change that.
 
 5.) TE-treeLSTM and machine translation results in the paper were done offline and are not included in the respository. 
+
 If you wish to get those results, you can contact `ddua@uci.edu` for further details.
 
 #### Acknowledgment
