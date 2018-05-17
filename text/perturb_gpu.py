@@ -130,7 +130,6 @@ def main(args):
             if flg: break
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch ARAE for Text Eval')
     parser.add_argument('--load_path', type=str, required=True,

@@ -250,8 +250,8 @@ def get_ppl(lm, sentences):
 
 class SNLIDataset(data.Dataset):
 
-    def __init__(self, path="/home/ddua/data/snli/snli_1.0", train=True, \
-                 vocab_size= 11000, maxlen = 10, reset_vocab=None):
+    def __init__(self, path="./data/classifier", train=True,
+                 vocab_size=11000, maxlen=10, reset_vocab=None):
         self.train = train
         self.train_data=[]
         self.test_data=[]
@@ -281,8 +281,7 @@ class SNLIDataset(data.Dataset):
             self.train_data = self.tokenize(self.train_path)
         if (not self.train) and os.path.exists(self.test_path):
             self.test_data = self.tokenize(self.test_path)
-        
-            
+
     def __getitem__(self, index):
         if self.train:
             return self.train_data[index]
@@ -374,9 +373,10 @@ class SNLIDataset(data.Dataset):
                 hypothesis_words = hypothesis_words[:self.maxlen]
                 
                 if self.train:
-                    lines.append([premise_indices,hypothesis_indices, label])
+                    lines.append([premise_indices, hypothesis_indices, label])
                 else:
-                    lines.append([premise_indices,hypothesis_indices,label, premise_words,hypothesis_words, hypothesis_length])
+                    lines.append([premise_indices, hypothesis_indices, label,
+                                  premise_words, hypothesis_words, hypothesis_length])
 
         print("Number of sentences dropped from {}: {} out of {} total".
               format(path, dropped, linecount))
@@ -390,7 +390,8 @@ def load_embeddings(root = './data/classifier/'):
     
     embeddings = torch.FloatTensor(len(vocab),100).uniform_(-0.1, 0.1)
     embeddings[0].fill_(0)
-    embeddings[1].copy_(torch.FloatTensor(map(float,open(file_path).read().split('\n')[0].strip().split(" ")[1:])))
+    embeddings[1].copy_(torch.FloatTensor(
+        map(float, open(file_path).read().split('\n')[0].strip().split(" ")[1:])))
     embeddings[2].copy_(embeddings[1])
     
     with open(file_path) as fr:
@@ -444,4 +445,3 @@ def collate_snli(batch):
                     Variable(torch.LongTensor(labels)) , premise_words,hypothesis_words , lengths      
     else:
         print("sentence length doesn't match")
-        print(b)

@@ -2,11 +2,6 @@
 Code for the paper "[Generating Natural Adversarial Examples](https://arxiv.org/abs/1710.11342)", ICLR 2018.
 
 
-## Dependency
-- Image experiments are based on [Gulrajani et al., 2017](https://github.com/igul222/improved_wgan_training)
-- Text experiments are based on [Zhao et al., 2017](https://github.com/jakezhaojb/ARAE)
-
-
 ## Reference
 ```
 @inproceedings{zhengli2018iclr,
@@ -16,3 +11,10 @@ Code for the paper "[Generating Natural Adversarial Examples](https://arxiv.org/
     year={2018}
 }
 ```
+
+
+## Dependency
+- Image experiments are based on [Gulrajani et al., 2017](https://github.com/igul222/improved_wgan_training)
+- Text experiments are based on [Zhao et al., 2017](https://github.com/jakezhaojb/ARAE)
+
+Thanks for making code accessible!

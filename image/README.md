@@ -16,4 +16,5 @@ Algorithms:
 
 Output samples are located in `./examples`
 
+#### Acknowledgment
 `./tflib` is based on [Gulrajani et al., 2017](https://github.com/igul222/improved_wgan_training)

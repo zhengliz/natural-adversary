@@ -1,8 +1,3 @@
-'''
-Created on Oct 1, 2017
-
-@author: dheeru
-'''
 import argparse
 from models import Baseline_Embeddings, Baseline_LSTM
 from utils import to_gpu, Corpus, batchify, SNLIDataset, collate_snli
@@ -115,5 +110,3 @@ if args.train_mode:
             best_accuracy = curr_acc
         
     print("Best accuracy :{0}".format(best_accuracy))
-
-        

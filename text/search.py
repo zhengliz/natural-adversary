@@ -23,9 +23,10 @@ def get_min(indices_adv1, indices_adv2, d):
     else:
         return idx_adv1, idx_adv2
 
+
 def search_fast(generator, pred_fn, x, y, z, nsamples=20, right=0.005):
     premise, hypothesis = x
-    d_adv1, d_adv2 = None, None
+    x_adv1, x_adv2, d_adv1, d_adv2, all_adv = None, None, None, None, None
     right_curr = right
     counter = 0
     while counter<=5: 
@@ -55,6 +56,7 @@ def search_fast(generator, pred_fn, x, y, z, nsamples=20, right=0.005):
                 d_adv1 = float(dist[idx_adv1])
                 d_adv2 = float(dist[idx_adv2])
             return x_adv1, x_adv2, d_adv1, d_adv2, all_adv
+
     print("\nGoing into infinite loop.......\n")
     return x_adv1, x_adv2, d_adv1, d_adv2, all_adv
 
@@ -152,4 +154,3 @@ def search(generator, pred_fn, x, y, z, nsamples=100, l=0., h=1.0, step=0.005, s
             loop_cnt += 1
 
     return x_adv1, x_adv2, d_adv1, d_adv2, all_adv
-
